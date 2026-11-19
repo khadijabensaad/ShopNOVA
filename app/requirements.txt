@@ -1,0 +1,7 @@
+# À épingler (versions exactes) après la première installation réussie : pip freeze
+fastapi
+uvicorn
+ollama
+chromadb
+mcp>=2,<3
+faker

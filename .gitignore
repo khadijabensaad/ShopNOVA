@@ -1,0 +1,8 @@
+.env
+__pycache__/
+ctf_state.json
+data/memory.json
+data/notice.txt
+data/outbox.json
+data/shop.db
+rag/store/

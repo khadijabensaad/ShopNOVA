@@ -1,0 +1,25 @@
+# Lab ShopNova v0.1 - ports liés à 127.0.0.1 : JAMAIS exposé sur Internet.
+services:
+  ollama:
+    image: ollama/ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+
+  app:
+    build: ./app
+    env_file: .env
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    depends_on:
+      - ollama
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  # v0.2 : ajouter ici le service "mcp" (serveur MCP vulnérable)
+
+volumes:
+  ollama_data:
+
+# Le module d'avis (ChromaDB) se lance en natif : voir README (Docker non pris en charge pour la v0.2).
