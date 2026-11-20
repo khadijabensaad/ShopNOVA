@@ -11,7 +11,6 @@ sont donnés à titre indicatif : les vérifier dans la version courante d'ATLAS
 TEAMS = {
     "AGT": {"code": "AGT", "number": "01", "name": "AI Agent Attack Team", "short": "AI Agent",
             "title": "AI Agent Security Lab", "accent": "violet", "component": "AI Agent",
-            "subtitle": "Comportement autonome, permissions des outils, mémoire et sécurité MCP.",
             "mission": "Démontrer comment un agent IA peut être manipulé pour prendre des décisions non autorisées "
                        "ou exécuter des actions dangereuses.",
             "categories": ["Excessive Agency", "Tool Abuse", "Unauthorized Tool Invocation", "Agent Memory Poisoning",
@@ -20,7 +19,6 @@ TEAMS = {
                            "Agent Workflow Manipulation", "Unauthorized Actions"]},
     "LLM": {"code": "LLM", "number": "02", "name": "LLM Attack Team", "short": "LLM",
             "title": "LLM Security Lab", "accent": "cyan", "component": "LLM",
-            "subtitle": "Intégrité des prompts, comportement du modèle et protection de l'information.",
             "mission": "Identifier les faiblesses du LLM et évaluer sa résistance aux manipulations, aux fuites "
                        "d'informations et aux contournements.",
             "categories": ["Direct Prompt Injection", "System Prompt Leakage", "Jailbreaking",
@@ -29,7 +27,6 @@ TEAMS = {
                            "Model Configuration Weaknesses", "Output Trust Violations", "Model/API Misuse"]},
     "RAG": {"code": "RAG", "number": "03", "name": "RAG Attack Team", "short": "RAG",
             "title": "RAG Security Lab", "accent": "amber", "component": "RAG",
-            "subtitle": "Ingestion documentaire, récupération vectorielle et intégrité des connaissances.",
             "mission": "Vérifier l'intégrité, la confidentialité, la pertinence et la sécurité des informations "
                        "récupérées par le RAG et de son modèle de modération.",
             "categories": ["RAG Data Poisoning", "Indirect Prompt Injection Through Documents",

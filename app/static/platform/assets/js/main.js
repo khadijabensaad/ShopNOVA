@@ -265,11 +265,10 @@ function showLogin(errorMsg) {
     finally { submit.classList.remove('busy'); }
   } },
   h('h2', {}, 'Connexion'),
-  h('p', { class: 'muted', style: { marginTop: 0 } }, 'Chaque rôle n\'accède qu\'à ses espaces de travail : les droits sont vérifiés par le serveur.'),
   h('div', { class: 'field', style: { marginTop: '18px' } }, h('label', { for: 'login-user' }, 'Identifiant'), user),
   h('div', { class: 'field', style: { marginTop: '12px' } }, h('label', { for: 'login-pass' }, 'Mot de passe'), pass),
   h('div', { style: { marginTop: '16px' } }, submit), err,
-  h('div', { class: 'note', style: { marginTop: '18px' } }, 'Choisissez un rôle. Mot de passe : PLATFORM_PASSWORD du fichier .env.',
+  h('div', { class: 'note', style: { marginTop: '18px' } }, 'Choisissez un rôle.',
     h('div', { class: 'demo-accounts' }, ['admin', 'agent', 'llm', 'rag', 'blue', 'auditor'].map((n) => h('button', { type: 'button', class: 'btn sm', onclick: () => { user.value = n; pass.focus(); } }, n)))));
   const art = h('div', { class: 'login-art' });
   mount(document.getElementById('app'), h('div', { class: 'login-wrap' }, art, h('div', { class: 'login-form' }, form)));
@@ -285,11 +284,9 @@ function showLogin(errorMsg) {
     if (sc.failed) box.remove();
   }
   art.append(h('div', { class: 'la-top' }, h('div', { class: 'brand' }, brandMark(),
-    h('div', {}, h('div', { class: 'brand-name' }, 'SHOPNOVA'), h('div', { class: 'brand-sub' }, 'AI Security Lab · IA as a Target'))),
+    h('div', {}, h('div', { class: 'brand-name' }, 'SHOPNOVA'), h('div', { class: 'brand-sub' }, 'AI Security Lab'))),
   h('div', { style: { marginTop: '34px' } }, nova(96, 'nova-float')),
-  h('h1', {}, 'Salut, je suis Nova. Essayez de me pirater.'),
-  h('p', {}, 'Trois équipes d\'attaque — AI Agent, LLM, RAG — et une Blue Team partagée testent, corrigent et prouvent la sécurité de l\'assistante ShopNOVA.')),
-  h('div', { class: 'la-bottom muted', style: { fontSize: '12px' } }, 'Laboratoire pédagogique volontairement vulnérable · données fictives · exécution locale uniquement (127.0.0.1).'));
+  h('h1', {}, 'Salut, je suis Nova. Essayez de me pirater.')));
   setTimeout(() => pass.focus(), 50);
 }
 
