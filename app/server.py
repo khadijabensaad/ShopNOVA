@@ -1,20 +1,63 @@
-"""Serveur du lab ShopNova : API + interface web. Lancer : python server.py -> http://localhost:8000"""
-import html
+"""Serveur du lab ShopNova : API + interfaces web. Lancer : python server.py -> http://localhost:8000
+
+  /          plateforme SecOps (AI Security Command Center, 3 équipes d'attaque, Blue Team) — authentifiée
+  /ctf       interface CTF historique (inchangée)
+  /shop      boutique « client » de Nova (inchangée)
+  /api/...   API historiques du lab (cible volontairement vulnérable, inchangées)
+  /api/secops/...  API de la plateforme (authentification + RBAC côté serveur)
+"""
+import sys
 import uuid
 from pathlib import Path
 
-import uvicorn
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, StreamingResponse
-from pydantic import BaseModel
+ROOT = Path(__file__).resolve().parent.parent
+for _sub in ("agent", "data", "rag"):  # chemins explicites (la v1 dépendait de l'ordre des imports)
+    if str(ROOT / _sub) not in sys.path:
+        sys.path.append(str(ROOT / _sub))
 
-import config
-import ctf
-import orchestrator
-import ws4_model
+import uvicorn  # noqa: E402
+from fastapi import FastAPI, HTTPException, Request  # noqa: E402
+from fastapi.responses import FileResponse, StreamingResponse  # noqa: E402
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+from pydantic import BaseModel  # noqa: E402
 
-app = FastAPI()
+import config  # noqa: E402
+import ctf  # noqa: E402
+import guards  # noqa: E402
+import orchestrator  # noqa: E402
+import ws4_model  # noqa: E402
+from secops import api as secops_api  # noqa: E402
+from secops import auth as secops_auth  # noqa: E402
+
+STATIC = Path(__file__).parent / "static"
+PLATFORM = STATIC / "platform"
+
+app = FastAPI(title="ShopNOVA AI Security Lab")
 app.include_router(ctf.router)
+app.include_router(secops_api.router)
+app.mount("/assets", StaticFiles(directory=str(PLATFORM / "assets")), name="assets")
+
+CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+       "font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self'; "
+       "frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    """En-têtes de sécurité pour la plateforme (les pages historiques du lab ne sont pas modifiées)."""
+    response = await call_next(request)
+    path = request.url.path
+    if path == "/" or path.startswith("/assets") or path.startswith("/api/secops"):
+        response.headers["Content-Security-Policy"] = CSP
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["X-Frame-Options"] = "DENY"
+    if path.startswith("/api/secops"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+secops_auth.ensure_demo_users()
 
 
 class Chat(BaseModel):
@@ -61,7 +104,13 @@ def _store():
 
 @app.get("/")
 def index():
-    return FileResponse(Path(__file__).parent / "static" / "ctf.html")
+    return FileResponse(PLATFORM / "index.html")
+
+
+@app.get("/ctf")
+def legacy_ctf():
+    """Interface CTF d'origine, conservée telle quelle (les défis et flags restent compatibles)."""
+    return FileResponse(STATIC / "ctf.html")
 
 
 @app.get("/shop")
@@ -88,39 +137,36 @@ def chat(c: Chat):
 @app.post("/api/review")
 def add_review(r: Review):
     """V05 : en mode vulnérable, aucune modération avant indexation (porte d'entrée de V06)."""
-    if config.state["secure"]:
-        if any(orchestrator.input_looks_malicious(x) for x in (r.product, r.author, r.text)) or len(r.text) > 500:
-            raise HTTPException(400, "Avis refusé par la modération.")
-        r = Review(product=html.escape(r.product), author=html.escape(r.author), text=html.escape(r.text))
+    g = guards.moderate_review(r.product, r.author, r.text, config.state["secure"])
+    if not g["accepted"]:
+        raise HTTPException(400, g["reason"])
+    r = Review(product=g["product"], author=g["author"], text=g["text"])
     text = f"Avis sur {r.product} par {r.author} : {r.text}"
     _store().add_document("reviews", doc_id=str(uuid.uuid4()), text=text,
                           metadata={"product": r.product, "author": r.author})
     return {"ok": True}
 
 
-NOTICE = Path(__file__).resolve().parent.parent / "data" / "notice.txt"
+NOTICE = guards.NOTICE
 
 
 @app.get("/api/notice")
 def get_notice():
-    if not NOTICE.exists():
-        NOTICE.write_text("Politique du service client : rester poli, répondre dans les meilleurs délais.",
-                          encoding="utf-8")
-    return {"text": NOTICE.read_text(encoding="utf-8")}
+    return {"text": guards.read_notice()}
 
 
 @app.post("/api/notice")  # V16 : aucune authentification en mode vulnérable
 def set_notice(n: Notice):
-    if config.state["secure"]:
-        raise HTTPException(403, "Modification de la note désactivée en mode sécurisé.")
-    NOTICE.write_text(n.text[:2000], encoding="utf-8")
+    r = guards.write_notice(n.text, config.state["secure"])
+    if not r["ok"]:
+        raise HTTPException(403, r["reason"])
     return get_notice()
 
 
 @app.get("/api/reviews")
 def list_reviews():
     """V11 : liste de tous les avis sans authentification (mode vulnérable)."""
-    if config.state["secure"]:
+    if not guards.reviews_listing_allowed(config.state["secure"]):
         raise HTTPException(403, "Authentification requise.")
     col = _store().collection("reviews")
     if col.count() == 0:

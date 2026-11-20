@@ -1,0 +1,8 @@
+.env
+**/__pycache__
+data/*.db
+data/*.db-*
+data/*.json
+rag/store/
+ctf_state.json
+tests/

@@ -66,11 +66,21 @@ def _active_model() -> dict:
     return OFFICIAL
 
 
+# Mode sécurisé (v2, correctif de l'évasion par dilution, B1) : un marqueur fortement malveillant du modèle
+# OFFICIEL suffit à classer le texte, quelle que soit la quantité de mots « sûrs » ajoutés autour.
+STRONG_MARKER = 3.0
+
+
 def classify(text: str, secure: bool) -> dict:
     model = _active_model()
-    score = model.get("bias", 0.0) + sum(model.get("weights", {}).get(t, 0.0) for t in _tokens(text))
+    tokens = _tokens(text)
+    score = model.get("bias", 0.0) + sum(model.get("weights", {}).get(t, 0.0) for t in tokens)
     label = "malveillant" if score > 0 else "sûr"
-    return {"label": label} if secure else {"label": label, "score": round(score, 2)}
+    if secure:
+        if any(OFFICIAL["weights"].get(t, 0.0) >= STRONG_MARKER for t in tokens):
+            label = "malveillant"
+        return {"label": label}  # V18 corrigé : aucun score brut exposé
+    return {"label": label, "score": round(score, 2)}
 
 
 def retrain(text: str, label: str, secure: bool) -> dict:
@@ -116,6 +126,23 @@ def load_model(source: str, secure: bool) -> dict:
     st["active"], st["override"] = "custom", None
     _save_state(st)
     return {"ok": True, "active": "custom"}
+
+
+def snapshot() -> dict:
+    """Sauvegarde l'état (utilisé par le moteur de tests pour ne jamais polluer le lab des joueurs)."""
+    return {"state": STATE.read_text(encoding="utf-8") if STATE.exists() else None,
+            "custom": CUSTOM.read_text(encoding="utf-8") if CUSTOM.exists() else None}
+
+
+def restore(snap: dict) -> None:
+    if snap["state"] is None:
+        STATE.unlink(missing_ok=True)
+    else:
+        STATE.write_text(snap["state"], encoding="utf-8")
+    if snap["custom"] is None:
+        CUSTOM.unlink(missing_ok=True)
+    else:
+        CUSTOM.write_text(snap["custom"], encoding="utf-8")
 
 
 def reset() -> None:

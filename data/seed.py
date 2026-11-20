@@ -9,14 +9,28 @@ import sqlite3
 import sys
 from pathlib import Path
 
-from faker import Faker
-
 sys.path.append(str(Path(__file__).resolve().parent.parent / "app"))
 import config  # noqa: E402
 
-Faker.seed(42)
 random.seed(42)
-fake = Faker("fr_FR")
+try:
+    from faker import Faker
+    Faker.seed(42)
+    fake = Faker("fr_FR")
+except ImportError:  # repli déterministe sans dépendance (environnements de test, CI)
+    class _MiniFaker:
+        _first = ["Amine", "Sarra", "Yassine", "Ines", "Mehdi", "Nour", "Karim", "Lina", "Omar", "Rania"]
+        _last = ["Ben Ali", "Trabelsi", "Gharbi", "Jlassi", "Mansour", "Haddad", "Bouazizi", "Chaabane"]
+
+        def name(self):
+            return f"{random.choice(self._first)} {random.choice(self._last)}"
+
+        def email(self):
+            return f"client{random.randint(1000, 9999)}@exemple.test"
+
+        def address(self):
+            return f"{random.randint(1, 120)} rue de la Liberté\n{random.randint(1000, 9999)} Sousse"
+    fake = _MiniFaker()
 
 DB = Path(__file__).parent / "shop.db"
 DB.unlink(missing_ok=True)

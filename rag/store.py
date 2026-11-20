@@ -4,12 +4,15 @@ Deux collections :
   - "faq"     : documents officiels (politiques), ajoutés par ingest.py
   - "reviews" : avis clients, ajoutés en direct via /api/review (V05 : AUCUNE vérification)
 """
+import sys
 from pathlib import Path
 
-import chromadb
-import ollama
+sys.path.append(str(Path(__file__).resolve().parent.parent / "app"))
 
-import config
+import chromadb  # noqa: E402
+import ollama  # noqa: E402
+
+import config  # noqa: E402
 
 STORE_PATH = Path(__file__).parent / "store"
 _client = chromadb.PersistentClient(path=str(STORE_PATH))
@@ -37,3 +40,23 @@ def search(coll_name: str, query: str, k: int = 3) -> list[str]:
         return []
     res = col.query(query_embeddings=[_embed(query)], n_results=min(k, col.count()))
     return res["documents"][0]
+
+
+def search_with_meta(coll_name: str, query: str, k: int = 3) -> list[dict]:
+    """Comme search(), mais conserve l'identifiant, les métadonnées (provenance) et la distance vectorielle."""
+    col = collection(coll_name)
+    if col.count() == 0:
+        return []
+    res = col.query(query_embeddings=[_embed(query)], n_results=min(k, col.count()),
+                    include=["documents", "metadatas", "distances"])
+    return [{"id": i, "text": t, "metadata": m or {}, "distance": round(float(d), 4)}
+            for i, t, m, d in zip(res["ids"][0], res["documents"][0], res["metadatas"][0], res["distances"][0])]
+
+
+def list_documents(coll_name: str) -> list[dict]:
+    col = collection(coll_name)
+    if col.count() == 0:
+        return []
+    data = col.get(include=["documents", "metadatas"])
+    return [{"id": i, "text": t, "metadata": m or {}} for i, t, m in zip(data["ids"], data["documents"],
+                                                                            data["metadatas"])]

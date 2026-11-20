@@ -12,6 +12,10 @@ for line in (root / ".env.example").read_text(encoding="utf-8").splitlines():
     if line.startswith("FLAG_") and line.endswith("="):
         name = line[:-1]
         line = f"{name}=FLAG{{{name[5:].lower()}_{secrets.token_hex(3)}}}"
+    if line == "PLATFORM_PASSWORD=":
+        pw = "Nova-" + secrets.token_urlsafe(9)
+        line = f"PLATFORM_PASSWORD={pw}"
+        print(f"Mot de passe des comptes de la plateforme (admin, agent, llm, rag, blue, auditor) : {pw}")
     lines.append(line)
 env.write_text("\n".join(lines) + "\n", encoding="utf-8")
 print(".env créé avec des flags aléatoires.")

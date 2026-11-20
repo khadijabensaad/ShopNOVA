@@ -10,7 +10,10 @@ import json
 import sys
 from pathlib import Path
 
-import ollama
+try:  # le moteur de tests peut appeler les outils MCP sans modèle (call_tool_raw)
+    import ollama
+except ImportError:  # pragma: no cover
+    ollama = None
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
@@ -50,6 +53,8 @@ async def run(history: list, user_message: str, secure: bool) -> dict:
                                    env={**os.environ, "SECURE_MODE": str(secure).lower(),
                                         "PLAYER_ID": str(config.PLAYER_ID)})
     trace = []
+    if ollama is None:
+        return {"answer": "Erreur de l'agent : bibliothèque python 'ollama' non installée.", "trace": trace}
     client = ollama.Client(host=config.OLLAMA_HOST)
 
     async with stdio_client(params) as (read, write):
@@ -112,3 +117,20 @@ async def call_tool_raw(tool: str, args: dict, secure: bool) -> dict:
                 return json.loads(text)
             except Exception:
                 return {"raw": text}
+
+
+async def list_tools_raw(secure: bool) -> dict:
+    """Inventaire réel des outils et ressources exposés par le serveur MCP (plateforme SecOps, équipe AGT)."""
+    import os
+    params = StdioServerParameters(command=sys.executable, args=[MCP_SCRIPT],
+                                   env={**os.environ, "SECURE_MODE": str(secure).lower(),
+                                        "PLAYER_ID": str(config.PLAYER_ID)})
+    async with stdio_client(params) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            tools = (await session.list_tools()).tools
+            resources = (await session.list_resources()).resources
+            return {"tools": [{"name": t.name, "description": t.description or "",
+                               "input_schema": t.input_schema or {}} for t in tools],
+                    "resources": [{"uri": str(r.uri), "name": r.name, "description": r.description or ""}
+                                  for r in resources]}

@@ -68,5 +68,14 @@ def shop_db():
 
 check("Base clients/commandes (data/shop.db)", shop_db,
       "supprimer data/shop.db puis relancer : python data/seed.py")
+def secops():
+    sys.path.insert(0, str(root / "app"))
+    from secops import auth, db
+    auth.ensure_demo_users()
+    n = db.q1("SELECT COUNT(*) AS n FROM users")["n"]
+    return f"({n} comptes, base {db.DB_PATH.name})" + (" — mot de passe PAR DÉFAUT" if auth.using_default_password() else "")
+
+
+check("Plateforme SecOps (data/secops.db)", secops, "vérifier les droits d'écriture sur data/")
 print("\nTout est prêt." if ok else "\nDes points sont à corriger (voir KO ci-dessus).")
 sys.exit(0 if ok else 1)

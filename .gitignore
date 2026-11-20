@@ -6,3 +6,7 @@ data/notice.txt
 data/outbox.json
 data/shop.db
 rag/store/
+data/secops.db*
+data/ws4_state.json
+data/ws4_custom_model.json
+.pytest_cache/

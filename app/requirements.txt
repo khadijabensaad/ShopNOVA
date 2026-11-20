@@ -5,3 +5,4 @@ ollama
 chromadb
 mcp>=2,<3
 faker
+# tests (optionnels) : pytest, httpx (TestClient), playwright (tests d'interface)

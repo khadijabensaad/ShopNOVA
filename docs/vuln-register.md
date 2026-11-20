@@ -56,3 +56,16 @@ Contrairement aux défis WS2/WS3, aucun LLM n'est impliqué : les défis WS4 son
 | E4 (gouvernance) | `data/ws5_data.py` : `GOVERNANCE_QUESTION`, `GOVERNANCE_ACCEPT` | Nommer la supervision humaine (EU AI Act) |
 
 Comme WS4, aucun LLM n'est impliqué : ces 4 défis sont déterministes et sans état persistant (rien n'est écrit sur disque).
+
+## v2 : plateforme SecOps (trois équipes, Blue Team partagée)
+Correspondance défis → scénarios de la plateforme (identifiants et flags existants inchangés) :
+C1/C2 → LLM-S01, LLM-S02, LLM-S07 · C3 → RAG-S01, RAG-S03, RAG-S11 · C4/C7 → LLM-S05, LLM-S06, LLM-S09 ·
+C5 → LLM-S08 · C6 → LLM-S03 · A1 → AGT-S04, AGT-S11 · A2 → AGT-S02 · A3 → AGT-S06, AGT-S10 · A4 → AGT-S07 ·
+A5 → AGT-S08 · A6 → AGT-S01 · A7 → AGT-S05 · B1 → RAG-S07 · B2 → RAG-S09 · B3/B5 → RAG-S08 · B4 → RAG-S10 ·
+chaîne C3 + A3 → XC-S01.
+
+Contrôles ajoutés au **mode sécurisé uniquement** (les défis en mode vulnérable sont inchangés) :
+- `data/memory_store.py` : validation par schéma des préférences (corrige le faux correctif de V15).
+- `data/ws4_model.py` : règle des marqueurs forts contre la dilution (B1 reste jouable en mode vulnérable).
+- `app/orchestrator.py` : provenance (source, confiance) des extraits RAG (V09/attribution).
+Volontairement conservé : V17 (`manager_override`), nécessaire au défi A7 ; le retest d'AGT-S05 échoue donc.

@@ -1,0 +1,82 @@
+/* ShopNOVA — jetons de design repris de la v1 :
+   sombre = interface CTF d'origine (marine profond, grille discrète, violet → cyan)
+   clair  = boutique Nova d'origine (dégradé lavande, panneaux givrés, Nunito arrondi, pilules) */
+:root {
+  --font-sans: "Nunito", ui-rounded, "Segoe UI Variable", system-ui, sans-serif;
+  --font-display: "Nunito", ui-rounded, "Segoe UI Variable", system-ui, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+
+  --fs-xs: 11.5px; --fs-sm: 13px; --fs-md: 14.5px; --fs-lg: 16px; --fs-xl: 20px; --fs-2xl: 26px; --fs-3xl: 30px;
+  --r-sm: 8px; --r-md: 12px; --r-lg: 16px; --r-xl: 22px; --r-pill: 999px;
+  --topbar-h: 64px;
+  --ease: cubic-bezier(.2, .7, .2, 1);
+  --dur: 160ms;
+}
+
+/* ------------------------------------------------------------------ SOMBRE (CTF v1) */
+:root, [data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0a0f1f; --bg-2: rgba(255, 255, 255, .045); --sidebar: #0d1428;
+  --card: rgba(17, 26, 51, .86); --card-solid: #111a33; --card-2: #16204a;
+  --border: rgba(120, 140, 255, .22); --border-strong: rgba(139, 123, 255, .5);
+  --text: #e6eaff; --text-2: #8e9bd0; --text-3: #6a77a8;
+  --primary: #8b7bff; --primary-ink: #06101f; --primary-soft: rgba(139, 123, 255, .16);
+  --secondary: #37d3ff; --secondary-soft: rgba(55, 211, 255, .13);
+  --success: #3ddc97; --success-soft: rgba(61, 220, 151, .13);
+  --warning: #ffb454; --warning-soft: rgba(255, 180, 84, .13);
+  --critical: #ff5d7a; --critical-soft: rgba(255, 93, 122, .14);
+  --info: #7fb2ff; --info-soft: rgba(127, 178, 255, .13);
+  --team-agt: #8b7bff; --team-agt-soft: rgba(139, 123, 255, .16);
+  --team-llm: #37d3ff; --team-llm-soft: rgba(55, 211, 255, .13);
+  --team-rag: #ffb454; --team-rag-soft: rgba(255, 180, 84, .13);
+  --team-blue: #3ddc97; --team-blue-soft: rgba(61, 220, 151, .13);
+  --grad: linear-gradient(135deg, #8b7bff, #37d3ff);
+  --grad-ink: #06101f;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3);
+  --shadow-md: 0 10px 30px rgba(0, 0, 0, .35);
+  --shadow-lg: 0 20px 50px rgba(0, 0, 0, .55);
+  --overlay: rgba(3, 6, 14, .72);
+  --grid-line: rgba(139, 123, 255, .07);
+  --focus: 0 0 0 3px rgba(55, 211, 255, .45);
+  --scene-bg: #070b17;
+  --input-bg: rgba(255, 255, 255, .055);
+  --page-bg:
+    radial-gradient(60vw 40vh at 10% 0, rgba(139, 123, 255, .16), transparent),
+    radial-gradient(50vw 40vh at 100% 100%, rgba(55, 211, 255, .10), transparent),
+    linear-gradient(rgba(139, 123, 255, .05) 1px, transparent 1px) 0 0 / 44px 44px,
+    linear-gradient(90deg, rgba(139, 123, 255, .05) 1px, transparent 1px) 0 0 / 44px 44px,
+    #0a0f1f;
+}
+
+/* ------------------------------------------------------------------ CLAIR (boutique v1) */
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #eceffe; --bg-2: rgba(124, 108, 240, .07); --sidebar: rgba(255, 255, 255, .8);
+  --card: rgba(255, 255, 255, .82); --card-solid: #ffffff; --card-2: #f6f5ff;
+  --border: rgba(124, 108, 240, .2); --border-strong: rgba(124, 108, 240, .45);
+  --text: #26255a; --text-2: #767bb0; --text-3: #9a9ec8;
+  --primary: #7c6cf0; --primary-ink: #ffffff; --primary-soft: rgba(124, 108, 240, .12);
+  --secondary: #3f86f0; --secondary-soft: rgba(91, 156, 255, .14);
+  --success: #1fa97a; --success-soft: rgba(95, 227, 180, .2);
+  --warning: #c98417; --warning-soft: rgba(255, 180, 84, .18);
+  --critical: #e2466a; --critical-soft: rgba(255, 93, 122, .13);
+  --info: #3f86f0; --info-soft: rgba(91, 156, 255, .13);
+  --team-agt: #7c6cf0; --team-agt-soft: rgba(124, 108, 240, .12);
+  --team-llm: #3f86f0; --team-llm-soft: rgba(91, 156, 255, .14);
+  --team-rag: #dd8a2a; --team-rag-soft: rgba(255, 180, 84, .18);
+  --team-blue: #1fa97a; --team-blue-soft: rgba(95, 227, 180, .2);
+  --grad: linear-gradient(135deg, #5b9cff, #7c6cf0);
+  --grad-ink: #ffffff;
+  --shadow-sm: 0 2px 8px rgba(124, 108, 240, .08);
+  --shadow-md: 0 12px 34px rgba(124, 108, 240, .16);
+  --shadow-lg: 0 20px 60px rgba(124, 108, 240, .25);
+  --overlay: rgba(61, 47, 85, .32);
+  --grid-line: rgba(124, 108, 240, .08);
+  --focus: 0 0 0 3px rgba(124, 108, 240, .35);
+  --scene-bg: rgba(255, 255, 255, .55);
+  --input-bg: #ffffff;
+  --page-bg:
+    radial-gradient(40vw 40vw at -5% -10%, rgba(180, 208, 255, .75), transparent 70%),
+    radial-gradient(36vw 36vw at 105% 110%, rgba(196, 184, 255, .7), transparent 70%),
+    linear-gradient(160deg, #eef2ff, #e9e5ff 55%, #e0eeff);
+}
