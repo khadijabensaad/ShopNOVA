@@ -10,3 +10,9 @@ data/secops.db*
 data/ws4_state.json
 data/ws4_custom_model.json
 .pytest_cache/
+# WS4 · supply chain : clés locales (jamais versionnées) et artefacts générés
+data/keys/
+data/ws4_custom_model.sig.json
+data/ws4_custom_model.json.sig
+data/ws4_last_scan.json
+*.cdx.json

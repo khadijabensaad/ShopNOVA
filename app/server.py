@@ -142,8 +142,10 @@ def add_review(r: Review):
         raise HTTPException(400, g["reason"])
     r = Review(product=g["product"], author=g["author"], text=g["text"])
     text = f"Avis sur {r.product} par {r.author} : {r.text}"
-    _store().add_document("reviews", doc_id=str(uuid.uuid4()), text=text,
-                          metadata={"product": r.product, "author": r.author})
+    # Provenance scellée (HMAC serveur) : la récupération en mode durci écarte tout document qui ne l'a pas.
+    meta = orchestrator.vector_policy().provenance_metadata(
+        "reviews", text, "api/review", {"product": r.product, "author": r.author, "source": "avis client"})
+    _store().add_document("reviews", doc_id=str(uuid.uuid4()), text=text, metadata=meta)
     return {"ok": True}
 
 

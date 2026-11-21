@@ -139,3 +139,22 @@ Objectif : lancer le **même jeu d'attaques** dans les deux modes et comparer le
 - **WS2 / WS3** : retours sur ce qui manque ; demandes de nouvelles failles via une issue Git.
 - **WS4** : accès à la base vectorielle et au chargement du modèle.
 - **WS5** : reçoit ce document pour le modèle de menaces, puis durcit la branche `hardened`.
+
+## 13. Extension WS4 · AI Security & Supply Chain
+
+Objectif pédagogique : suivre un modèle de bout en bout, de l'attaque à la preuve.
+
+| Étape du récit | Mécanisme | Démonstration |
+|---|---|---|
+| Attaquer un modèle | Evasion, Data Poisoning, Model Extraction, Membership Inference | défis B1, B2, B3, B5 (inchangés) ; scénarios RAG-S07..S09 |
+| Compromettre sa chaîne d'approvisionnement | modèle non signé (B4, RAG-S10), modèle altéré après activation (RAG-S12), format dangereux (Pickle) | import dans l'onglet WS4, fixtures de test |
+| Vérifier son intégrité | scanner statique, SHA-256, signature, vérification identité/émetteur, AI-BOM | pipeline Upload → Scan → AI-BOM → Sign → Verify → Activate |
+| Sécuriser son utilisation (RAG) | provenance scellée, politique de récupération | RAG-S13 (vector poisoning), RAG-S14 (retrieval manipulation), inspecteur |
+| Détecter et prouver | règles DET-ML-02/03, DET-RAG-02/03 ; preuves hachées ; contrôles CTL-RAG-07, 09..13 ; retest | Defense Center, Evidence Center |
+
+Règles de conception respectées : mode vulnérable inchangé pour B1–B5 ; mode durci isolé ; aucune exécution de
+code de modèle ; aucune signature locale présentée comme Sigstore ; aucun résultat RAG simulé si ChromaDB ou
+Ollama sont absents (statut « indisponible »). Détails : `docs/ws4-supply-chain.md`.
+
+Compteurs mis à jour : 34 scénarios (RAG : 14), 16 règles de détection, 6 contrôles Blue Team ajoutés ou renommés
+(CTL-RAG-07 Model Integrity Verification, CTL-RAG-09 à 13).

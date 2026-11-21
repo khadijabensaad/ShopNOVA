@@ -69,3 +69,15 @@ Contrôles ajoutés au **mode sécurisé uniquement** (les défis en mode vulné
 - `data/ws4_model.py` : règle des marqueurs forts contre la dilution (B1 reste jouable en mode vulnérable).
 - `app/orchestrator.py` : provenance (source, confiance) des extraits RAG (V09/attribution).
 Volontairement conservé : V17 (`manager_override`), nécessaire au défi A7 ; le retest d'AGT-S05 échoue donc.
+
+## WS4 · AI Security & Supply Chain (mode sécurisé uniquement)
+V20 est **conservée en mode vulnérable** (B4 reste jouable) : le scanner y produit un rapport informatif, non bloquant.
+
+| Faiblesse | Emplacement | Contrôle (durci) | Test de validation |
+|---|---|---|---|
+| V20 · import sans analyse | `data/ws4_model.py` : `upload_model()` | scanner `data/model_security.py` (CTL-RAG-09) | `tests/test_model_security.py::test_bad_models_are_rejected` |
+| V20 · activation sans signature | `load_model()` | signature + vérification identité/émetteur (CTL-RAG-10) | `test_hardened_activation_requires_scan_signature_and_verification` |
+| Modèle altéré après activation (RAG-S12) | `_active_model()` | empreinte comparée à l'usage, repli officiel (CTL-RAG-07) | `test_model_tampering_scenario_both_modes` |
+| Écriture directe dans la base vectorielle (RAG-S13) | `rag/store.py` (`add_document` sans passerelle) | sceau HMAC vérifié à la récupération (CTL-RAG-11) | RAG-S13 durci (ChromaDB + Ollama requis) |
+| Bourrage de mots-clés (RAG-S14) | `orchestrator.retrieve()` | `vector_security.apply_policy()` (CTL-RAG-12) | `test_retrieval_policy_filters_untrusted_and_puts_official_first`, RAG-S14 durci |
+| Inventaire absent | — | AI-BOM CycloneDX 1.7 (CTL-RAG-13) | `test_aibom_is_generated_from_project_and_valid`, CI |

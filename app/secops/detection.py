@@ -29,6 +29,10 @@ RULES = {
     "DET-ML-01": ("Modification du modèle de modération", "high"),
     "DET-CTL-01": ("Action bloquée par un contrôle", "medium"),
     "DET-CTX-01": ("Rôle forgé dans l'historique", "high"),
+    "DET-ML-02": ("Fichier de modèle rejeté par le scanner", "high"),
+    "DET-ML-03": ("Intégrité ou signature de modèle invalide", "critical"),
+    "DET-RAG-02": ("Extrait sans provenance valide dans la récupération", "high"),
+    "DET-RAG-03": ("Contenu tiers suspect en tête de récupération", "medium"),
 }
 
 
@@ -74,6 +78,18 @@ def analyze(obs: dict) -> list[dict]:
             out.append(_events("DET-MEM-01", "Tentative de mémoriser un avantage ou un privilège."))
     if any(h.get("role") not in ("user", "assistant") for h in obs.get("history") or [] if isinstance(h, dict)):
         out.append(_events("DET-CTX-01", "Historique client contenant un rôle non autorisé."))
+    scan = obs.get("model_scan") or {}
+    if scan.get("verdict") == "rejected":
+        out.append(_events("DET-ML-02", f"Modèle « {scan.get('filename')} » rejeté par l'analyse statique."))
+    ver = obs.get("model_verify")
+    if ver and ver.get("verified") is False:
+        out.append(_events("DET-ML-03", f"Empreinte/signature non conforme ({str(ver.get('sha256', ''))[:12]}…)."))
+    retrieval = obs.get("retrieval") or []
+    if any(not (d.get("provenance") or {}).get("valid", True) for d in retrieval):
+        out.append(_events("DET-RAG-02", "Un extrait récupéré n'a pas de provenance valide."))
+    first_third = next((d for d in retrieval if d.get("collection") != "faq"), None)
+    if first_third and re.search(r"@|https?://|instruction", first_third.get("excerpt", ""), re.I):
+        out.append(_events("DET-RAG-03", "Premier contenu tiers récupéré : instruction ou contact externe."))
     for op in obs.get("ml_ops") or []:
         out.append(_events("DET-ML-01", f"Opération sensible sur le modèle : {op}."))
     for c in obs.get("controls") or []:

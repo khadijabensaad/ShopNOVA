@@ -1,0 +1,83 @@
+# WS4 · Model Supply Chain : analyse des modèles, AI-BOM CycloneDX et tests de non-régression.
+# Aucun téléchargement de modèle lourd (ni Ollama, ni ChromaDB, ni poids) ; fixtures légères uniquement.
+name: model-security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read          # moindre privilège : lecture seule, aucun secret requis
+
+concurrency:
+  group: model-security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  model-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PYTHONUTF8: "1"
+      SHOPNOVA_KEYS_DIR: ${{ runner.temp }}/shopnova-keys   # clés de démo éphémères, jamais dans le dépôt
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Dépendances légères (sans ChromaDB ni Ollama)
+        run: |
+          python -m pip install --upgrade pip
+          pip install fastapi uvicorn httpx pydantic faker "mcp>=2,<3" cryptography pytest \
+                      "cyclonedx-python-lib[json-validation]"
+
+      - name: 1-4 · Repérer et analyser les fichiers de modèle (extensions, structure, poids, intégrité, signatures)
+        run: python scripts/model_scan.py --json model-scan-report.json
+
+      - name: 5 · Générer puis valider l'AI-BOM (schéma CycloneDX 1.7 officiel)
+        run: |
+          python data/aibom.py --offline --output ai-bom.cdx.json --require-official
+          python data/aibom.py --validate ai-bom.cdx.json --require-official
+
+      - name: 6 · Tests (scanner, signature, altération, format interdit, poids anormaux, B1-B5, RBAC)
+        run: python -m pytest tests -q --ignore=tests/e2e
+
+      - name: Preuves CI (rapport du scanner + AI-BOM)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-security-evidence
+          path: |
+            model-scan-report.json
+            ai-bom.cdx.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # Vérification Sigstore réelle, optionnelle : s'exécute seulement si le dépôt définit les variables
+  # SIGSTORE_IDENTITY et SIGSTORE_ISSUER (Settings → Variables) et contient des signatures <modèle>.json.sig.
+  sigstore-verify:
+    if: ${{ vars.SIGSTORE_IDENTITY != '' && vars.SIGSTORE_ISSUER != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      SHOPNOVA_SIGSTORE_IDENTITY: ${{ vars.SIGSTORE_IDENTITY }}
+      SHOPNOVA_SIGSTORE_ISSUER: ${{ vars.SIGSTORE_ISSUER }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install model-signing cryptography
+      - name: Vérifier chaque modèle signé avec Sigstore (identité et émetteur attendus)
+        run: python scripts/model_scan.py --require-signature

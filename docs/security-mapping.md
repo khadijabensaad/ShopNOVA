@@ -23,6 +23,9 @@ Identifiants MITRE ATLAS à revérifier dans la version courante d'ATLAS avant p
 | RAG | S08 | LLM02 | AML.T0024 Exfiltration via AI Inference API |
 | RAG | S09 | LLM04 | AML.T0020 Poison Training Data |
 | RAG | S10 | LLM03 Supply Chain | AML.T0010 ML Supply Chain Compromise |
+| RAG | S12 | LLM03 Supply Chain, LLM04 | AML.T0010 ML Supply Chain Compromise, AML.T0018 Manipulate AI Model |
+| RAG | S13 | LLM08 Vector and Embedding Weaknesses, LLM04 | AML.T0070 RAG Poisoning |
+| RAG | S14 | LLM08, LLM01 | AML.T0070 RAG Poisoning, AML.T0051.001 |
 
 ## Contrôles Blue Team → NIST AI RMF et ISO/IEC 42001
 | Contrôle | NIST AI RMF (fonction) | Thème ISO/IEC 42001 / 27001 |
@@ -33,6 +36,12 @@ Identifiants MITRE ATLAS à revérifier dans la version courante d'ATLAS avant p
 | CTL-LLM-01/02 (secrets, DLP) | MANAGE | Protection de l'information (27001 A.8.12) |
 | CTL-LLM-03 (limites) | MANAGE | Gestion de capacité (27001 A.8.6) |
 | CTL-RAG-03/04 (isolation, provenance) | MAP / MANAGE | Transparence et traçabilité |
+| CTL-RAG-09/07/10 (validation du fichier, intégrité, signature du modèle) | MANAGE / MEASURE | Cycle de vie et fournisseurs du système d'IA (42001), relations fournisseurs (27001 A.5.19–A.5.21) |
+| CTL-RAG-13 (AI-BOM CycloneDX) | MAP / GOVERN | Inventaire des ressources du système d'IA (42001), inventaire des actifs (27001 A.5.9) |
+| CTL-RAG-11/12 (provenance RAG, validation de la récupération) | MANAGE | Qualité et provenance des données (42001) |
 | Règles DET-* et journal d'audit | MEASURE | Journalisation et surveillance (27001 A.8.15/A.8.16) |
 | Retest obligatoire avant VERIFIED | MEASURE | Vérification de l'efficacité des mesures |
 | Registre partagé et rapports | GOVERN | Gestion des risques liés à l'IA |
+
+Références WS4 : CycloneDX 1.7 (ML-BOM), OpenSSF Model Signing (`model_signing`, Sigstore), OWASP Top 10 for LLM
+Applications 2025 (LLM03, LLM04, LLM08), MITRE ATLAS. Correspondances à revérifier avant publication.

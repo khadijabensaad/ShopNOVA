@@ -1,0 +1,16 @@
+{
+  "name": "fixture-valid",
+  "version": "1.0",
+  "bias": -1.0,
+  "weights": {
+    "ignore": 3.0,
+    "instructions": 2.5,
+    "confortable": -0.4,
+    "qualité": -0.4
+  },
+  "provenance": {
+    "supplier": "ShopNOVA",
+    "source": "tests/fixtures",
+    "created": "2026-11"
+  }
+}

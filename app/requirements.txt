@@ -5,4 +5,5 @@ ollama
 chromadb
 mcp>=2,<3
 faker
+cryptography  # signature locale de démonstration des modèles (WS4)
 # tests (optionnels) : pytest, httpx (TestClient), playwright (tests d'interface)

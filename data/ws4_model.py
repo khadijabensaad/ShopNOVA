@@ -10,11 +10,17 @@ Vulnérabilités volontaires (mode vulnérable) :
   V18 classify() renvoie le score brut (permet l'extraction et l'inférence d'appartenance)
   V19 retrain() accepte n'importe quel (texte, étiquette) sans contrôle (empoisonnement par rétroaction)
   V20 upload_model()/load_model() n'importe un modèle externe sans vérifier son intégrité
+
+Mode sécurisé (WS4 supply chain) : import -> analyse statique (model_security.scan_model_file) -> signature
+(éditeur de confiance) -> vérification de l'intégrité, de la signature et de l'identité -> activation.
+L'analyse est séparée de l'activation, et l'intégrité du modèle actif est revérifiée à chaque utilisation.
 """
 import hashlib
 import json
 import re
 from pathlib import Path
+
+import model_security as msec
 
 DATA_DIR = Path(__file__).parent
 OFFICIAL = {
@@ -34,9 +40,13 @@ OFFICIAL = {
     },
 }
 OFFICIAL_HASH = hashlib.sha256(json.dumps(OFFICIAL, sort_keys=True).encode()).hexdigest()
+OFFICIAL_SHA256 = msec.sha256_bytes(msec.canonical_bytes(OFFICIAL))  # empreinte de l'artefact canonique
 
 STATE = DATA_DIR / "ws4_state.json"       # {"active": "official"|"custom", "weights_override": {...}|null}
 CUSTOM = DATA_DIR / "ws4_custom_model.json"
+CUSTOM_SIG = DATA_DIR / "ws4_custom_model.sig.json"        # signature (démo locale) du modèle importé
+CUSTOM_SIGSTORE = DATA_DIR / "ws4_custom_model.json.sig"   # signature Sigstore (model_signing), si fournie
+LAST_SCAN = DATA_DIR / "ws4_last_scan.json"                # dernier rapport du scanner (preuve Blue Team)
 
 
 def _tokens(text: str) -> list[str]:
@@ -54,13 +64,17 @@ def _save_state(st: dict) -> None:
     STATE.write_text(json.dumps(st), encoding="utf-8")
 
 
-def _active_model() -> dict:
+def _active_model(secure: bool = False) -> dict:
     st = _load_state()
     if st.get("override") is not None:  # empoisonnement par rétroaction (B2)
         return st["override"]
     if st.get("active") == "custom" and CUSTOM.exists():
+        raw = CUSTOM.read_bytes()
+        # Mode sécurisé : le fichier actif doit être exactement celui qui a été vérifié à l'activation.
+        if secure and st.get("custom_sha256") != msec.sha256_bytes(raw):
+            return OFFICIAL
         try:
-            return json.loads(CUSTOM.read_text(encoding="utf-8"))
+            return json.loads(raw.decode("utf-8"))
         except Exception:
             return OFFICIAL
     return OFFICIAL
@@ -72,7 +86,7 @@ STRONG_MARKER = 3.0
 
 
 def classify(text: str, secure: bool) -> dict:
-    model = _active_model()
+    model = _active_model(secure)
     tokens = _tokens(text)
     score = model.get("bias", 0.0) + sum(model.get("weights", {}).get(t, 0.0) for t in tokens)
     label = "malveillant" if score > 0 else "sûr"
@@ -97,54 +111,125 @@ def retrain(text: str, label: str, secure: bool) -> dict:
     return {"ok": True}
 
 
-def upload_model(raw_json: str, secure: bool) -> dict:
-    """V20 : en mode vulnérable, aucun contrôle d'intégrité sur le modèle importé."""
+def _save_scan(report: dict) -> None:
+    LAST_SCAN.write_text(json.dumps(report, ensure_ascii=False), encoding="utf-8")
+
+
+def upload_model(raw_json, secure: bool, filename: str = "custom_model.json") -> dict:
+    """Import d'un modèle. L'analyse statique est toujours effectuée et conservée comme preuve.
+    Vulnérable (V20, conservé pour B4) : le rapport est informatif, le fichier est stocké quoi qu'il dise.
+    Sécurisé : un fichier rejeté par le scanner n'est pas stocké ; un fichier accepté reste INACTIF tant qu'il
+    n'est pas signé par un éditeur de confiance puis vérifié (analyse séparée de l'activation)."""
+    raw = raw_json.encode("utf-8") if isinstance(raw_json, str) else bytes(raw_json)
+    scan = msec.scan_model_file(raw, filename)
+    _save_scan(scan)
     if secure:
-        return {"error": "Import de modèle désactivé en mode sécurisé."}
+        if scan["verdict"] != "accepted":
+            failed = [c["detail"] for c in scan["checks"] if c["status"] == "fail"]
+            return {"error": "Modèle rejeté par le scanner, fichier non stocké : " + " ".join(failed), "scan": scan}
+        CUSTOM.write_bytes(raw)
+        CUSTOM_SIG.unlink(missing_ok=True)
+        return {"ok": True, "status": "analysé, inactif : signature et vérification requises", "scan": scan}
     try:
-        model = json.loads(raw_json)
+        model = json.loads(raw.decode("utf-8"))
         assert "weights" in model
     except Exception as exc:
-        return {"error": f"JSON de modèle invalide : {exc}"}
-    CUSTOM.write_text(json.dumps(model), encoding="utf-8")
-    return {"ok": True}
+        return {"error": f"JSON de modèle invalide : {exc}", "scan": scan}
+    CUSTOM.write_bytes(raw)
+    CUSTOM_SIG.unlink(missing_ok=True)
+    return {"ok": True, "scan": scan}
+
+
+def sign_custom() -> dict:
+    """Signature par l'éditeur de confiance (action réservée à l'administrateur côté plateforme).
+    Le fichier doit d'abord passer le scanner : on ne signe pas un artefact non conforme."""
+    if not CUSTOM.exists():
+        return {"error": "Aucun modèle importé à signer."}
+    raw = CUSTOM.read_bytes()
+    scan = msec.scan_model_file(raw, CUSTOM.name)
+    if scan["verdict"] != "accepted":
+        return {"error": "Signature refusée : le fichier ne passe pas le scanner.", "scan": scan}
+    record = msec.sign_local(raw, CUSTOM.name)
+    CUSTOM_SIG.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+    return {"ok": True, "signature": record}
+
+
+def signature_record() -> dict | None:
+    if CUSTOM_SIGSTORE.exists():
+        return {"mode": "sigstore", "signature_path": str(CUSTOM_SIGSTORE)}
+    try:
+        return json.loads(CUSTOM_SIG.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def verify_custom() -> dict:
+    """Vérification complète avant activation : scanner (à nouveau) + intégrité + signature + identité."""
+    if not CUSTOM.exists():
+        return {"verified": False, "error": "Aucun modèle importé.", "scan": None, "verification": None}
+    raw = CUSTOM.read_bytes()
+    scan = msec.scan_model_file(raw, CUSTOM.name)
+    ver = msec.verify(raw, signature_record(), CUSTOM)
+    return {"verified": scan["verdict"] == "accepted" and ver["verified"], "scan": scan, "verification": ver,
+            "sha256": msec.sha256_bytes(raw)}
 
 
 def load_model(source: str, secure: bool) -> dict:
     st = _load_state()
     if source == "official":
-        st["active"], st["override"] = "official", None
+        st["active"], st["override"], st["custom_sha256"] = "official", None, None
         _save_state(st)
         return {"ok": True, "active": "official"}
+    if not CUSTOM.exists():
+        return {"error": "Aucun modèle personnalisé à activer."}
     if secure:
-        if not CUSTOM.exists():
-            return {"error": "Aucun modèle personnalisé à vérifier."}
-        digest = hashlib.sha256(CUSTOM.read_bytes()).hexdigest()
-        # Un vrai modèle signé serait vérifié par une clé publique ; ici, on compare au hachage officiel.
-        if digest != hashlib.sha256(json.dumps(OFFICIAL).encode()).hexdigest():
-            return {"error": "Hachage invalide : ce modèle n'est pas signé par ShopNova, import refusé."}
+        check = verify_custom()
+        if not check["verified"]:
+            failed = [s["label"] for s in (check["verification"] or {}).get("steps", []) if s["status"] == "fail"]
+            if check["scan"] and check["scan"]["verdict"] != "accepted":
+                failed.insert(0, "scanner")
+            return {"error": "Vérification échouée, activation refusée : " + (", ".join(failed) or "signature absente")
+                             + ".", "verification": check}
     st["active"], st["override"] = "custom", None
+    st["custom_sha256"] = msec.sha256_bytes(CUSTOM.read_bytes())
     _save_state(st)
     return {"ok": True, "active": "custom"}
 
 
+def status() -> dict:
+    """État courant de la chaîne d'approvisionnement du classificateur (pour l'interface et l'AI-BOM)."""
+    st = _load_state()
+    active = "override" if st.get("override") is not None else st.get("active", "official")
+    custom = None
+    if CUSTOM.exists():
+        raw = CUSTOM.read_bytes()
+        custom = {"sha256": msec.sha256_bytes(raw), "size": len(raw), "signature": signature_record(),
+                  "matches_activated": st.get("custom_sha256") == msec.sha256_bytes(raw)}
+    try:
+        last_scan = json.loads(LAST_SCAN.read_text(encoding="utf-8"))
+    except Exception:
+        last_scan = None
+    return {"active": active, "official_sha256": OFFICIAL_SHA256, "custom": custom, "last_scan": last_scan,
+            "sigstore": msec.sigstore_status(), "local_signing": msec.local_signing_available()}
+
+
+_SNAP_FILES = {"state": STATE, "custom": CUSTOM, "sig": CUSTOM_SIG, "scan": LAST_SCAN}
+
+
 def snapshot() -> dict:
     """Sauvegarde l'état (utilisé par le moteur de tests pour ne jamais polluer le lab des joueurs)."""
-    return {"state": STATE.read_text(encoding="utf-8") if STATE.exists() else None,
-            "custom": CUSTOM.read_text(encoding="utf-8") if CUSTOM.exists() else None}
+    return {k: (f.read_bytes() if f.exists() else None) for k, f in _SNAP_FILES.items()}
 
 
 def restore(snap: dict) -> None:
-    if snap["state"] is None:
-        STATE.unlink(missing_ok=True)
-    else:
-        STATE.write_text(snap["state"], encoding="utf-8")
-    if snap["custom"] is None:
-        CUSTOM.unlink(missing_ok=True)
-    else:
-        CUSTOM.write_text(snap["custom"], encoding="utf-8")
+    for k, f in _SNAP_FILES.items():
+        if snap.get(k) is None:
+            f.unlink(missing_ok=True)
+        else:
+            f.write_bytes(snap[k])
 
 
 def reset() -> None:
     STATE.write_text(json.dumps({"active": "official", "override": None}), encoding="utf-8")
-    CUSTOM.unlink(missing_ok=True)
+    for f in (CUSTOM, CUSTOM_SIG, LAST_SCAN):
+        f.unlink(missing_ok=True)

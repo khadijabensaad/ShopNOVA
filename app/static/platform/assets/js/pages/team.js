@@ -6,6 +6,7 @@ import { sceneBox } from '../scene3d.js';
 import { setCrumbs, notifyChanged } from '../main.js';
 import { openFinding, openEvidence } from '../finding.js';
 import { findingsTable, evidenceTable, executionsTable, filterBar } from '../tables.js';
+import { ws4Console } from './ws4.js';
 
 const COLOR = { AGT: 'var(--team-agt)', LLM: 'var(--team-llm)', RAG: 'var(--team-rag)' };
 const state = { tab: 'overview', mode: 'vulnerable' };
@@ -48,13 +49,14 @@ export async function render(root, { app, arg, params }) {
     h('div', { 'data-team': team }, tabs([
       ['overview', 'Vue d\'ensemble'], ['scenarios', 'Scénarios', sc.scenarios.filter((s) => !s.benign).length],
       ['console', { AGT: 'Tool Call Inspector', LLM: 'Prompt Testing', RAG: 'Document Inspector' }[team]],
+      ...(team === 'RAG' ? [['ws4', 'Model Security (WS4)']] : []),
       ['findings', 'Vulnérabilités', findings.length], ['evidence', 'Preuves'], ['history', 'Historique']],
     state.tab, (t) => { state.tab = t; reload(); })), content);
 
   const views = { overview: overviewTab, scenarios: scenariosTab, console: { AGT: agentConsole, LLM: llmConsole, RAG: ragConsole }[team],
     findings: () => card(null, null, findingsTable(findings, { onChange: reload, hideTeam: true })),
     evidence: async () => card(null, null, evidenceTable((await api.get(`/evidence?team=${team}`)).evidence)),
-    history: historyTab };
+    history: historyTab, ws4: (ctx) => ws4Console({ ...ctx, runScenario }) };
   const view = await views[state.tab]({ app, team, T, sc: sc.scenarios, findings, m, reload, canRun, params });
   mount(content, view);
   if (params.get('s') && state.tab === 'scenarios') { const s = sc.scenarios.find((x) => x.id === params.get('s')); if (s) scenarioModal(app, s, canRun, reload); }

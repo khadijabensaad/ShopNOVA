@@ -406,6 +406,12 @@ def controls(request: Request):
         validated = None
         if latest:
             validated = "pass" if all(e["outcome"] == "attack_blocked" for e in latest) else "fail"
+        if c["id"] == "CTL-RAG-13":  # contrôle vérifié en direct : l'AI-BOM courant est généré puis validé
+            try:
+                _, local, _ = _aibom(offline=True)
+                validated, latest = ("pass" if local["valid"] else "fail"), [None]
+            except Exception:
+                validated = "fail"
         out.append({**c, "scenarios": linked, "validation": validated, "evidence_runs": len(latest)})
     return {"controls": out}
 
@@ -627,6 +633,211 @@ async def rag_gateway(body: Gateway, request: Request):
                        {"type": "pipeline_trace", "document": body.text[:2000], "author": body.author[:200],
                         "gateway": g, "moderation": cls})
     audit(u, "rag.gateway_test", mode, {"accepted": g["accepted"]}, _ip(request))
+    return out
+
+
+# ------------------------------------------------------------------ WS4 · Adversarial ML, Model Supply Chain, RAG & Vector
+class ModelFile(BaseModel):
+    filename: str = "custom_model.json"
+    content: str = ""
+    content_b64: str = ""
+    mode: str = "vulnerable"
+
+
+class ModeOnly(BaseModel):
+    mode: str = "vulnerable"
+
+
+class Retrieval(BaseModel):
+    query: str
+    mode: str = "vulnerable"
+
+
+ADVERSARIAL = [  # attaques d'Adversarial ML déjà démontrées par les défis WS4 (aucun nouveau scénario créé)
+    {"id": "evasion", "name": "Evasion", "challenge": "B1", "scenarios": ["RAG-S07"], "control": "CTL-RAG-08",
+     "objective": "Faire classer « sûr » un texte malveillant au moment de l'inférence."},
+    {"id": "poisoning", "name": "Data Poisoning", "challenge": "B2", "scenarios": ["RAG-S09"], "control": "CTL-RAG-06",
+     "objective": "Déplacer la frontière de décision en injectant des données d'entraînement étiquetées à tort."},
+    {"id": "extraction", "name": "Model Extraction", "challenge": "B3", "scenarios": ["RAG-S08"], "control": "CTL-RAG-05",
+     "objective": "Reconstituer le comportement du modèle (et son mot-clé secret) en le sondant."},
+    {"id": "membership", "name": "Membership Inference", "challenge": "B5", "scenarios": ["RAG-S08"],
+     "control": "CTL-RAG-05", "objective": "Déterminer si une donnée précise a servi à l'entraînement."},
+]
+
+
+def _latest_outcomes(scenario_ids: list[str]) -> dict:
+    out = {}
+    for mode in ("vulnerable", "hardened"):
+        r = db.q1(f"SELECT outcome, id FROM executions WHERE status='completed' AND mode=? AND scenario_id IN "
+                  f"({','.join('?' * len(scenario_ids))}) ORDER BY started_at DESC LIMIT 1", (mode, *scenario_ids))
+        out[mode] = {"outcome": r["outcome"], "execution_id": r["id"]} if r else None
+    return out
+
+
+@router.get("/ws4/overview")
+def ws4_overview(request: Request):
+    u = current(request)
+    need(u, "evidence:RAG")
+    import ctf
+    import ws4_model
+    cards = []
+    for a in ADVERSARIAL:
+        ch = ctf.BY_ID[a["challenge"]]
+        sc = catalog.BY_ID[a["scenarios"][0]]
+        cards.append({**a, "principle": ch["learn"], "countermeasure": ch["fix"], "component": sc["component"],
+                      "demo": f"Défi {a['challenge']} « {ch['title']} » · scénario {a['scenarios'][0]}",
+                      "results": _latest_outcomes(a["scenarios"])})
+    st = ws4_model.status()
+    st.pop("last_scan", None)
+    return {"adversarial": cards, "supply_chain": st, "can_sign": auth.can(u, "model:sign"),
+            "can_run": auth.can(u, "run:RAG")}
+
+
+def _model_obs(res: dict) -> dict:
+    obs = {"ml_ops": []}
+    if res.get("scan"):
+        obs["model_scan"] = {"verdict": res["scan"]["verdict"], "filename": res["scan"]["filename"]}
+    return obs
+
+
+@router.post("/ws4/model/scan")
+async def ws4_model_scan(body: ModelFile, request: Request):
+    """Import + analyse statique (le fichier n'est ni chargé comme code, ni activé)."""
+    u = current(request)
+    need(u, "run:RAG")
+    import base64
+    import ws4_model
+    mode = _mode(body.mode)
+    try:
+        raw = base64.b64decode(body.content_b64, validate=True) if body.content_b64 else body.content.encode("utf-8")
+    except Exception:
+        raise HTTPException(422, "content_b64 invalide.")
+    if not raw or len(raw) > 256 * 1024:
+        raise HTTPException(422, "Fichier vide ou supérieur à 256 Ko.")
+    res = ws4_model.upload_model(raw, mode == "hardened", filename=body.filename[:120])
+    out = await _adhoc(u, "RAG", "Model Supply Chain", f"Model upload · {body.filename[:60]}", mode, res,
+                       {**_model_obs(res), "ml_ops": ["upload"]},
+                       {"type": "model_scan", "filename": body.filename[:120], "scan": res.get("scan"),
+                        "stored": bool(res.get("ok")), "error": res.get("error")})
+    audit(u, "ws4.model_scan", mode, {"verdict": (res.get("scan") or {}).get("verdict"), "stored": bool(res.get("ok"))},
+          _ip(request))
+    return out
+
+
+@router.post("/ws4/model/sign")
+async def ws4_model_sign(request: Request):
+    """Signature par l'éditeur de confiance : réservée aux rôles disposant de model:sign (administrateur)."""
+    u = current(request)
+    need(u, "model:sign")
+    import ws4_model
+    try:
+        res = ws4_model.sign_custom()
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc))
+    out = await _adhoc(u, "RAG", "Model Supply Chain", "Model signing (démo locale)", "hardened", res,
+                       _model_obs(res), {"type": "model_signature", "result": res})
+    audit(u, "ws4.model_sign", "local-demo", {"ok": bool(res.get("ok"))}, _ip(request))
+    return out
+
+
+@router.post("/ws4/model/verify")
+async def ws4_model_verify(request: Request):
+    u = current(request)
+    need(u, "evidence:RAG")
+    import ws4_model
+    res = ws4_model.verify_custom()
+    obs = {"model_verify": {"verified": res["verified"], "sha256": res.get("sha256")}}
+    if res.get("scan"):
+        obs["model_scan"] = {"verdict": res["scan"]["verdict"], "filename": res["scan"]["filename"]}
+    out = await _adhoc(u, "RAG", "Model Supply Chain", "Model verification", "hardened", res, obs,
+                       {"type": "model_verification", "result": res})
+    audit(u, "ws4.model_verify", "hardened", {"verified": res["verified"]}, _ip(request))
+    return out
+
+
+@router.post("/ws4/model/activate")
+async def ws4_model_activate(body: ModeOnly, request: Request):
+    u = current(request)
+    need(u, "run:RAG")
+    import ws4_model
+    mode = _mode(body.mode)
+    res = ws4_model.load_model("custom", mode == "hardened")
+    ver = (res.get("verification") or {})
+    obs = {"ml_ops": ["activate_custom"]}
+    if ver:
+        obs["model_verify"] = {"verified": ver.get("verified"), "sha256": ver.get("sha256")}
+    out = await _adhoc(u, "RAG", "Model Supply Chain", "Model activation", mode, res, obs,
+                       {"type": "model_activation", "result": res})
+    audit(u, "ws4.model_activate", mode, {"ok": bool(res.get("ok"))}, _ip(request))
+    return out
+
+
+@router.post("/ws4/model/reset")
+def ws4_model_reset(request: Request):
+    u = current(request)
+    need(u, "run:RAG")
+    import ws4_model
+    ws4_model.reset()
+    audit(u, "ws4.model_reset", "", {}, _ip(request))
+    return {"ok": True, "status": ws4_model.status()}
+
+
+def _aibom(offline: bool = False):
+    import aibom
+    bom = aibom.generate(offline=offline)
+    return bom, aibom.validate_structure(bom), aibom.validate_official(bom)
+
+
+@router.get("/ws4/aibom")
+def ws4_aibom(request: Request):
+    u = current(request)
+    need(u, "evidence:RAG")
+    bom, local, official = _aibom()
+    rows = []
+    for c in bom["components"]:
+        props = {p["name"]: p["value"] for p in c.get("properties") or []}
+        rows.append({"ref": c["bom-ref"], "name": c["name"], "type": c["type"], "version": c.get("version"),
+                     "supplier": (c.get("supplier") or {}).get("name"), "purl": c.get("purl"),
+                     "sha256": next((h["content"] for h in c.get("hashes") or [] if h["alg"] == "SHA-256"), None),
+                     "unknown": props.get("shopnova:unknown-fields"), "integrity": props.get("shopnova:integrity")
+                     or ("empreinte" if c.get("hashes") else None)})
+    return {"spec_version": bom["specVersion"], "serial": bom["serialNumber"], "timestamp": bom["metadata"]["timestamp"],
+            "components": rows, "dependencies": bom["dependencies"], "validation": local, "official_validation": official,
+            "ollama": next((p["value"] for p in bom["metadata"]["properties"] if p["name"] == "shopnova:ollama-status"), None)}
+
+
+@router.get("/ws4/aibom/export")
+def ws4_aibom_export(request: Request):
+    u = current(request)
+    need(u, "evidence:RAG")
+    bom, local, _ = _aibom()
+    audit(u, "ws4.aibom_export", "", {"valid": local["valid"], "components": len(bom["components"])}, _ip(request))
+    return JSONResponse(bom, headers={"Content-Disposition": "attachment; filename=shopnova-ai-bom.cdx.json"})
+
+
+@router.post("/ws4/rag/retrieve")
+async def ws4_rag_retrieve(body: Retrieval, request: Request):
+    """Inspection d'une vraie récupération ChromaDB : scores, provenance, confiance, décision et contexte final."""
+    u = current(request)
+    need(u, "run:RAG")
+    import orchestrator
+    mode = _mode(body.mode)
+    q = body.query.strip()[:500]
+    if not q:
+        raise HTTPException(422, "Requête vide.")
+    try:
+        chunks = orchestrator.retrieve(q)
+    except Exception as exc:
+        raise HTTPException(503, f"Récupération indisponible (ChromaDB ou modèle d'embeddings) : {type(exc).__name__}. "
+                                 "Démarrer Ollama, puis python rag/ingest.py et python rag/seed_reviews.py.")
+    vs = orchestrator.vector_policy()
+    policy = vs.apply_policy(chunks, mode == "hardened")
+    context = orchestrator.format_context(policy["kept"], mode == "hardened")
+    result = {"query": q, "decisions": policy["decisions"], "order": policy["order"], "context": context}
+    out = await _adhoc(u, "RAG", "Retrieval", "Retrieval inspection", mode, result,
+                       {"documents": [c["text"] for c in policy["kept"]], "retrieval": policy["decisions"]},
+                       {"type": "retrieval_trace", **result})
+    audit(u, "ws4.retrieve", mode, {"hits": len(chunks), "kept": len(policy["kept"])}, _ip(request))
     return out
 
 

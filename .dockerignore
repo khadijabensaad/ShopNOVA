@@ -6,3 +6,9 @@ data/*.json
 rag/store/
 ctf_state.json
 tests/
+
+# WS4 : clés locales et artefacts générés hors de l image
+data/keys/
+data/ws4_custom_model*
+data/ws4_last_scan.json
+*.cdx.json

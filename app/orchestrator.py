@@ -56,6 +56,14 @@ def get_store():
     return _store
 
 
+def vector_policy():
+    get_store_dir = str(Path(__file__).resolve().parent.parent / "rag")
+    if get_store_dir not in sys.path:
+        sys.path.append(get_store_dir)
+    import vector_security
+    return vector_security
+
+
 def _secure(secure):
     return config.state["secure"] if secure is None else bool(secure)
 
@@ -129,10 +137,10 @@ def retrieve(user_message: str) -> list[dict]:
     for coll, trust in (("faq", "officiel"), ("reviews", "non fiable")):
         if hasattr(st, "search_with_meta"):
             for hit in st.search_with_meta(coll, user_message, k=2):
-                chunks.append({"collection": coll, "text": hit["text"], "trust": trust,
+                chunks.append({"collection": coll, "text": hit["text"], "trust": trust, "id": hit.get("id"),
                                "source": (hit.get("metadata") or {}).get("source")
                                or ("avis client" if coll == "reviews" else coll),
-                               "distance": hit.get("distance")})
+                               "distance": hit.get("distance"), "metadata": hit.get("metadata") or {}})
         else:  # compatibilité avec une ancienne version de rag/store.py
             for text in st.search(coll, user_message, k=2):
                 chunks.append({"collection": coll, "text": text, "trust": trust, "source": coll})
@@ -164,7 +172,10 @@ def format_context(chunks: list[dict], secure=None) -> str:
 def build_context(user_message: str, secure=None) -> str:
     """FAQ officielle + avis clients pertinents (RAG). V06 : les avis sont collés tels quels dans le prompt."""
     try:
-        return format_context(retrieve(user_message), secure)
+        chunks = retrieve(user_message)
+        if _secure(secure):  # WS4 · validation de la récupération : provenance vérifiée, sources non fiables filtrées
+            chunks = vector_policy().apply_policy(chunks, True)["kept"]
+        return format_context(chunks, secure)
     except Exception as exc:  # chromadb absent, modèle d'embeddings absent, base vide...
         print("Module RAG indisponible :", exc)
         return ""

@@ -64,3 +64,29 @@ HTML/CSS/JS sans framework (choix justifié : le frontend existant n'utilisait p
   Pause hors écran, `prefers-reduced-motion` respecté, réglage 3D haute/légère/désactivée, repli 2D. Aucun CDN
   requis (le lab fonctionne hors-ligne ; seules les polices Google sont optionnelles).
 - Tableaux, formulaires et résultats de sécurité restent en 2D.
+
+## WS4 · AI Security & Supply Chain
+```
+ Interface : onglet « Model Security (WS4) » (pages/ws4.js, espace RAG)
+        │  /api/secops/ws4/*  (api.py : RBAC, audit, preuves via _adhoc)
+        ├── data/model_security.py   scanner statique · SHA-256 · signature Ed25519 (local-demo) · Sigstore (model_signing)
+        ├── data/ws4_model.py         upload → scan → (inactif) → signature → vérification → activation ; repli si altéré
+        ├── data/aibom.py             AI-BOM CycloneDX 1.7 depuis l'état réel (Ollama, rag/docs, paquets installés)
+        └── rag/vector_security.py    sceau de provenance HMAC · politique de récupération (orchestrator.build_context)
+ Blue Team : scénarios RAG-S12..S14 (runners.py), contrôles CTL-RAG-07, 09..13 (catalog.py), règles DET-ML-02/03,
+             DET-RAG-02/03 (detection.py), CTL-RAG-13 validé en direct dans /controls.
+ CI : scripts/model_scan.py + .github/workflows/model-security.yml
+```
+| Route | Permission | Rôle |
+|---|---|---|
+| `GET /ws4/overview` | `evidence:RAG` | cartes Adversarial ML (B1–B5) + état de la chaîne d'approvisionnement |
+| `POST /ws4/model/scan` | `run:RAG` | import + analyse (texte ou base64, ≤ 256 Ko) ; preuve `model_scan` |
+| `POST /ws4/model/sign` | `model:sign` (administrateur) | signature par l'éditeur de confiance |
+| `POST /ws4/model/verify` | `evidence:RAG` | intégrité, signature, identité ; preuve `model_verification` |
+| `POST /ws4/model/activate` | `run:RAG` | activation (mode durci : vérification obligatoire) |
+| `POST /ws4/model/reset` | `run:RAG` | retour au modèle officiel |
+| `GET /ws4/aibom`, `/ws4/aibom/export` | `evidence:RAG` | inventaire, validation, export JSON |
+| `POST /ws4/rag/retrieve` | `run:RAG` | récupération ChromaDB réelle + politique ; 503 « indisponible » sinon |
+
+Séparation : logique métier dans `data/` et `rag/`, API dans `app/secops/api.py`, interface dans `pages/ws4.js`.
+Clés locales dans `data/keys/` (0600), exclues de Git et de l'image Docker. Dépendance ajoutée : `cryptography`.

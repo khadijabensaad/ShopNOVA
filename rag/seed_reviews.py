@@ -9,6 +9,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent / "app"))
 sys.path.append(str(Path(__file__).resolve().parent))
 import store  # noqa: E402
+import vector_security  # noqa: E402
 
 REVIEWS = [
     ("Casque audio", "Sami", "Très confortable et bonne autonomie, je recommande !"),
@@ -22,8 +23,10 @@ def main():
     except Exception:
         pass
     for product, author, text in REVIEWS:
-        store.add_document("reviews", doc_id=f"{product}-{author}", text=f"Avis sur {product} par {author} : {text}",
-                           metadata={"product": product, "author": author})
+        full = f"Avis sur {product} par {author} : {text}"
+        store.add_document("reviews", doc_id=f"{product}-{author}", text=full,
+                           metadata=vector_security.provenance_metadata(
+                               "reviews", full, "seed", {"product": product, "author": author, "source": "avis client"}))
         print(f"Ajouté : avis de {author} sur {product}")
 
 

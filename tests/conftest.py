@@ -10,6 +10,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 os.environ["SECOPS_DB"] = str(Path(tempfile.mkdtemp()) / "secops-test.db")
+os.environ.setdefault("SHOPNOVA_KEYS_DIR", tempfile.mkdtemp(prefix="shopnova-keys-"))  # jamais data/keys en test
 os.environ["PLATFORM_PASSWORD"] = "ShopNova!2026"  # prioritaire sur .env (config utilise setdefault)
 try:
     import fastapi  # noqa: F401

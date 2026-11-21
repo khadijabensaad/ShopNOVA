@@ -404,3 +404,12 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after { animation: none !important; transition: none !important; }
 
 .tbl td .mono, .tbl td .status, .tbl td .badge { white-space: nowrap; }
+
+/* WS4 · pipeline et cycle compacts (réutilise .stage ; aucune animation) */
+.ws4-flow { display: flex; align-items: stretch; gap: 6px; flex-wrap: wrap; }
+.ws4-flow .ws4-step { cursor: default; flex: 1 1 120px; min-width: 110px; }
+.ws4-flow .ws4-step.done { border-color: var(--success); box-shadow: 0 0 0 1px var(--success) inset; }
+.ws4-flow .ws4-step.bad { border-color: var(--critical); box-shadow: 0 0 0 1px var(--critical) inset; }
+.ws4-flow .ws4-step.accent { border-color: var(--team-rag); box-shadow: 0 0 0 1px var(--team-rag) inset; }
+.ws4-arrow { align-self: center; color: var(--text-3); font-weight: 700; }
+@media (max-width: 860px) { .ws4-arrow { display: none; } }
